@@ -26,9 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/imperfectgo/zap-syslog/internal"
-	"github.com/imperfectgo/zap-syslog/internal/bufferpool"
-	"github.com/imperfectgo/zap-syslog/syslog"
+	"github.com/lemonlinger/zap-syslog/internal"
+	"github.com/lemonlinger/zap-syslog/internal/bufferpool"
+	"github.com/lemonlinger/zap-syslog/syslog"
 	"go.uber.org/zap"
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
@@ -73,6 +73,7 @@ type SyslogEncoderConfig struct {
 	Hostname string          `json:"hostname" yaml:"hostname"`
 	PID      int             `json:"pid" yaml:"pid"`
 	App      string          `json:"app" yaml:"app"`
+	WithBOM  bool            `json:"with_bom" yaml:"with_bom"`
 }
 
 type syslogEncoder struct {
@@ -259,16 +260,20 @@ func (enc *syslogEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field)
 	msg.AppendString(enc.App)
 
 	// SP PROCID
-	msg.AppendByte(' ')
+	msg.AppendByte('[')
 	msg.AppendInt(int64(enc.PID))
+	msg.AppendByte(']')
 
 	// SP MSGID SP STRUCTURED-DATA (just ignore)
-	msg.AppendString(" - -")
+	// msg.AppendString(" - -")
 
 	// SP UTF8 MSG
 	json, err := enc.je.EncodeEntry(ent, fields)
 	if json.Len() > 0 {
-		msg.AppendString(" \xef\xbb\xbf")
+		msg.AppendByte(' ')
+		if enc.WithBOM {
+			msg.AppendString("\xef\xbb\xbf")
+		}
 		bs := json.Bytes()
 		if enc.Framing == OctetCountingFraming {
 			// Strip trailing line feed

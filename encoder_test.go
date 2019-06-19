@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/imperfectgo/zap-syslog/syslog"
+	"github.com/lemonlinger/zap-syslog/syslog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/multierr"
@@ -304,6 +304,7 @@ func assertOutput(t testing.TB, desc string, expected string, f func(zapcore.Enc
 			EncodeTime:     zapcore.EpochTimeEncoder,
 			EncodeDuration: zapcore.SecondsDurationEncoder,
 		},
+		WithBOM: true,
 	}).(*syslogEncoder)
 	f(enc)
 	buf, err := enc.EncodeEntry(testEntry, nil)
@@ -387,6 +388,7 @@ func testEncoderConfig(framing Framing) SyslogEncoderConfig {
 		App:      "encoder_test",
 		PID:      9876,
 		Facility: syslog.LOG_LOCAL0,
+		WithBOM:  true,
 	}
 }
 
@@ -405,7 +407,7 @@ func testSyslogEncoderFraming(t *testing.T, framing Framing) {
 	defer buf.Free()
 
 	msg := buf.String()
-	msgPrefix := "<135>1 2017-01-02T03:04:05.123456Z localhost encoder_test 9876 - - \xef\xbb\xbf"
+	msgPrefix := "<135>1 2017-01-02T03:04:05.123456Z localhost encoder_test[9876] \xef\xbb\xbf"
 	if framing == OctetCountingFraming {
 		spacePos := strings.Index(msg, " ") + 1
 		msgPrefix = fmt.Sprintf("%d %s", buf.Len()-spacePos, msgPrefix)
