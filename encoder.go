@@ -237,14 +237,12 @@ func (enc *syslogEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field)
 	}
 	pr := int64((enc.Facility & facilityMask) | (p & severityMask))
 
-	// <PRI>version
+	// <PRI>
 	msg.AppendByte('<')
 	msg.AppendInt(pr)
 	msg.AppendByte('>')
-	msg.AppendInt(version)
 
 	// SP TIMESTAMP
-	msg.AppendByte(' ')
 	if ent.Time.IsZero() {
 		msg.AppendString(nilValue)
 	} else {
