@@ -39,7 +39,7 @@ const (
 	severityMask    = 0x07
 	facilityMask    = 0xf8
 	nilValue        = "-"
-	timestampFormat = "2006-01-02T15:04:05.000000Z07:00" // RFC3339 with micro fraction seconds
+	timestampFormat = "2006-01-02T15:04:05-07:00"
 	maxHostnameLen  = 255
 	maxAppNameLen   = 48
 )
