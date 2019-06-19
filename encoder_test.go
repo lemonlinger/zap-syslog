@@ -407,7 +407,7 @@ func testSyslogEncoderFraming(t *testing.T, framing Framing) {
 	defer buf.Free()
 
 	msg := buf.String()
-	msgPrefix := "<135>1 2017-01-02T03:04:05.123456Z localhost encoder_test[9876] \xef\xbb\xbf"
+	msgPrefix := "<135>1 2017-01-02T03:04:05.123456Z localhost encoder_test[9876]: \xef\xbb\xbf"
 	if framing == OctetCountingFraming {
 		spacePos := strings.Index(msg, " ") + 1
 		msgPrefix = fmt.Sprintf("%d %s", buf.Len()-spacePos, msgPrefix)

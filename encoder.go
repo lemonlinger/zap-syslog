@@ -262,7 +262,7 @@ func (enc *syslogEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field)
 	// SP PROCID
 	msg.AppendByte('[')
 	msg.AppendInt(int64(enc.PID))
-	msg.AppendByte(']')
+	msg.AppendString("]: ")
 
 	// SP MSGID SP STRUCTURED-DATA (just ignore)
 	// msg.AppendString(" - -")
@@ -270,7 +270,6 @@ func (enc *syslogEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field)
 	// SP UTF8 MSG
 	json, err := enc.je.EncodeEntry(ent, fields)
 	if json.Len() > 0 {
-		msg.AppendByte(' ')
 		if enc.WithBOM {
 			msg.AppendString("\xef\xbb\xbf")
 		}
