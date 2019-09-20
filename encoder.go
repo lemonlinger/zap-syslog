@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lemonlinger/zap-syslog/encoders/logfmt"
 	"github.com/lemonlinger/zap-syslog/internal"
 	"github.com/lemonlinger/zap-syslog/internal/bufferpool"
 	"github.com/lemonlinger/zap-syslog/syslog"
@@ -46,7 +47,7 @@ const (
 
 var (
 	_ zapcore.Encoder = &syslogEncoder{}
-	_                 = zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()).(jsonEncoder)
+	_                 = zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()).(genericEncoder)
 )
 
 // Framing.
@@ -59,7 +60,7 @@ const (
 // Framing configures RFC6587 TCP transport framing.
 type Framing int
 
-type jsonEncoder interface {
+type genericEncoder interface {
 	zapcore.Encoder
 	zapcore.ArrayEncoder
 }
@@ -68,17 +69,18 @@ type jsonEncoder interface {
 type SyslogEncoderConfig struct {
 	zapcore.EncoderConfig
 
-	Framing  Framing         `json:"framing" yaml:"framing"`
-	Facility syslog.Priority `json:"facility" yaml:"facility"`
-	Hostname string          `json:"hostname" yaml:"hostname"`
-	PID      int             `json:"pid" yaml:"pid"`
-	App      string          `json:"app" yaml:"app"`
-	WithBOM  bool            `json:"with_bom" yaml:"with_bom"`
+	Framing   Framing         `json:"framing" yaml:"framing"`
+	Facility  syslog.Priority `json:"facility" yaml:"facility"`
+	Hostname  string          `json:"hostname" yaml:"hostname"`
+	PID       int             `json:"pid" yaml:"pid"`
+	App       string          `json:"app" yaml:"app"`
+	WithBOM   bool            `json:"with_bom" yaml:"with_bom"`
+	Formatter string          `json:"formatter" yaml:"formatter"`
 }
 
 type syslogEncoder struct {
 	*SyslogEncoderConfig
-	je jsonEncoder
+	je genericEncoder
 }
 
 func rfc5424CompliantASCIIMapper(r rune) rune {
@@ -126,10 +128,19 @@ func NewSyslogEncoder(cfg SyslogEncoderConfig) zapcore.Encoder {
 	}
 
 	cfg.EncoderConfig.LineEnding = "\n"
-	je := zapcore.NewJSONEncoder(cfg.EncoderConfig).(jsonEncoder)
+
+	var ge genericEncoder
+	switch cfg.Formatter {
+	case "text":
+		ge = logfmt.NewEncoder(cfg.EncoderConfig).(genericEncoder)
+	case "json":
+		fallthrough
+	default:
+		ge = zapcore.NewJSONEncoder(cfg.EncoderConfig).(genericEncoder)
+	}
 	return &syslogEncoder{
 		SyslogEncoderConfig: &cfg,
-		je:                  je,
+		je:                  ge,
 	}
 }
 
@@ -210,7 +221,7 @@ func (enc *syslogEncoder) Clone() zapcore.Encoder {
 func (enc *syslogEncoder) clone() *syslogEncoder {
 	clone := &syslogEncoder{
 		SyslogEncoderConfig: enc.SyslogEncoderConfig,
-		je:                  enc.je.Clone().(jsonEncoder),
+		je:                  enc.je.Clone().(genericEncoder),
 	}
 	return clone
 }
