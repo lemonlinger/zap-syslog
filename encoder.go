@@ -131,7 +131,7 @@ func NewSyslogEncoder(cfg SyslogEncoderConfig) zapcore.Encoder {
 
 	var ge genericEncoder
 	switch cfg.Formatter {
-	case "text":
+	case "logfmt":
 		ge = logfmt.NewEncoder(cfg.EncoderConfig).(genericEncoder)
 	case "json":
 		fallthrough
