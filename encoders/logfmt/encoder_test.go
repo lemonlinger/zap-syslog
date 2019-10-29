@@ -84,6 +84,14 @@ func TestEncoderObjectFields(t *testing.T) {
 				e.OpenNamespace("innermost")
 			},
 		},
+		{
+			desc:     "reflect",
+			expected: `slice-of-struct=[{"Name":"foo"},{"Name":"bar"}] append-slice=[{"Name":"append-foo"},{"Name":"append-bar"}]`,
+			f: func(e zapcore.Encoder) {
+				e.AddReflected("slice-of-struct", []struct{ Name string }{{"foo"}, {"bar"}})
+				e.AddReflected("append-slice", []struct{ Name string }{{"append-foo"}, {"append-bar"}})
+			},
+		},
 	}
 
 	for _, tt := range tests {

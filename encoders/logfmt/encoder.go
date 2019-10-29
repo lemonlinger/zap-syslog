@@ -3,10 +3,9 @@ package logfmt
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"math"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -98,19 +97,13 @@ func (enc *logfmtEncoder) AddInt64(key string, value int64) {
 }
 
 func (enc *logfmtEncoder) AddReflected(key string, value interface{}) error {
-	rvalue := reflect.ValueOf(value)
-	switch rvalue.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Map, reflect.Struct:
-		return ErrUnsupportedValueType
-	case reflect.Array, reflect.Slice, reflect.Ptr:
-		if rvalue.IsNil() {
-			enc.AddByteString(key, nil)
-			return nil
-		}
-		return enc.AddReflected(key, rvalue.Elem().Interface())
+	marshaled, err := json.Marshal(value)
+	if err != nil {
+		return err
 	}
-	enc.AddString(key, fmt.Sprint(value))
-	return nil
+	enc.addKey(key)
+	_, err = enc.buf.Write(marshaled)
+	return err
 }
 
 func (enc *logfmtEncoder) OpenNamespace(key string) {
@@ -194,19 +187,12 @@ func (enc *logfmtEncoder) AppendInt64(value int64) {
 }
 
 func (enc *logfmtEncoder) AppendReflected(value interface{}) error {
-	rvalue := reflect.ValueOf(value)
-	switch rvalue.Kind() {
-	case reflect.Array, reflect.Chan, reflect.Func, reflect.Map, reflect.Slice, reflect.Struct:
-		return ErrUnsupportedValueType
-	case reflect.Ptr:
-		if rvalue.IsNil() {
-			enc.AppendByteString(nil)
-			return nil
-		}
-		return enc.AppendReflected(rvalue.Elem().Interface())
+	marshaled, err := json.Marshal(value)
+	if err != nil {
+		return err
 	}
-	enc.AppendString(fmt.Sprint(value))
-	return nil
+	_, err = enc.buf.Write(marshaled)
+	return err
 }
 
 func (enc *logfmtEncoder) AppendString(value string) {
