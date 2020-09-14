@@ -59,7 +59,8 @@ func (enc *logfmtEncoder) AddArray(key string, arr zapcore.ArrayMarshaler) error
 }
 
 func (enc *logfmtEncoder) AddObject(key string, obj zapcore.ObjectMarshaler) error {
-	return ErrUnsupportedValueType
+	enc.addKey(key)
+	return enc.AppendObject(obj)
 }
 
 func (enc *logfmtEncoder) AddBinary(key string, value []byte) {
@@ -142,7 +143,18 @@ func (enc *logfmtEncoder) AppendArray(arr zapcore.ArrayMarshaler) error {
 }
 
 func (enc *logfmtEncoder) AppendObject(obj zapcore.ObjectMarshaler) error {
-	return ErrUnsupportedValueType
+	marshaler := enc.clone()
+	marshaler.namespaces = nil
+
+	err := obj.MarshalLogObject(marshaler)
+	if err == nil {
+		enc.AppendByteString(marshaler.buf.Bytes())
+	} else {
+		enc.AppendByteString(nil)
+	}
+	marshaler.buf.Free()
+	putEncoder(marshaler)
+	return err
 }
 
 func (enc *logfmtEncoder) AppendBool(value bool) {
