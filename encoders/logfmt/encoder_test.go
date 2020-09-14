@@ -11,6 +11,17 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+type metaField struct {
+	ip  string
+	pid int
+}
+
+func (m *metaField) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("ip", m.ip)
+	enc.AddInt("pid", m.pid)
+	return nil
+}
+
 func TestEncoderObjectFields(t *testing.T) {
 	tests := []struct {
 		desc     string
@@ -90,6 +101,17 @@ func TestEncoderObjectFields(t *testing.T) {
 			f: func(e zapcore.Encoder) {
 				e.AddReflected("slice-of-struct", []struct{ Name string }{{"foo"}, {"bar"}})
 				e.AddReflected("append-slice", []struct{ Name string }{{"append-foo"}, {"append-bar"}})
+			},
+		},
+		{
+			desc:     "object",
+			expected: `_meta_="ip=127.0.0.1 pid=1234"`,
+			f: func(e zapcore.Encoder) {
+				meta := &metaField{
+					ip:  "127.0.0.1",
+					pid: 1234,
+				}
+				assert.NoError(t, e.AddObject("_meta_", meta))
 			},
 		},
 	}
