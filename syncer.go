@@ -22,6 +22,9 @@ package zapsyslog
 
 import (
 	"net"
+	"os"
+	"syscall"
+	"time"
 
 	"go.uber.org/zap/zapcore"
 )
@@ -30,18 +33,59 @@ var (
 	_ zapcore.WriteSyncer = &ConnSyncer{}
 )
 
+type MetricsRecorder interface {
+	RecordDialError(network, addr string)
+	RecordWriteError(network, addr string)
+}
+
 // ConnSyncer describes connection sink for syslog.
 type ConnSyncer struct {
-	network string
-	raddr   string
-	conn    net.Conn
+	network      string
+	raddr        string
+	conn         net.Conn
+	metrics      MetricsRecorder
+	dialTimeout  time.Duration
+	writeTimeout time.Duration
+}
+
+type ConnSyncerOption func(*ConnSyncer)
+
+func WithMetricsRecorder(metrics MetricsRecorder) ConnSyncerOption {
+	return func(c *ConnSyncer) {
+		c.metrics = metrics
+	}
+}
+
+func WithDialTimeout(dialTimeout time.Duration) ConnSyncerOption {
+	return func(c *ConnSyncer) {
+		c.dialTimeout = dialTimeout
+	}
+}
+
+func WithWriteTimeout(writeTimeout time.Duration) ConnSyncerOption {
+	return func(c *ConnSyncer) {
+		c.writeTimeout = writeTimeout
+	}
 }
 
 // NewConnSyncer returns a new conn sink for syslog.
-func NewConnSyncer(network, raddr string) (*ConnSyncer, error) {
+func NewConnSyncer(network, raddr string, opts ...ConnSyncerOption) (*ConnSyncer, error) {
 	s := &ConnSyncer{
 		network: network,
 		raddr:   raddr,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	if s.metrics == nil {
+		s.metrics = noopMetricsRecorder{}
+	}
+	if s.dialTimeout == 0 {
+		s.dialTimeout = 1 * time.Second
+	}
+	if s.writeTimeout == 0 {
+		s.writeTimeout = 1 * time.Second
 	}
 
 	err := s.connect()
@@ -61,8 +105,9 @@ func (s *ConnSyncer) connect() error {
 	}
 
 	var c net.Conn
-	c, err := net.Dial(s.network, s.raddr)
+	c, err := net.DialTimeout(s.network, s.raddr, s.dialTimeout)
 	if err != nil {
+		s.metrics.RecordDialError(s.network, s.raddr)
 		return err
 	}
 
@@ -73,18 +118,45 @@ func (s *ConnSyncer) connect() error {
 // Write writes to syslog with retry.
 func (s *ConnSyncer) Write(p []byte) (n int, err error) {
 	if s.conn != nil {
+		s.conn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
 		if n, err := s.conn.Write(p); err == nil {
 			return n, err
+		}
+		s.metrics.RecordWriteError(s.network, s.raddr)
+		// No need to retry if it's a too long message error as the connection is still valid.
+		if isTooLongMessageError(err) {
+			return 0, err
 		}
 	}
 	if err := s.connect(); err != nil {
 		return 0, err
 	}
 
-	return s.conn.Write(p)
+	s.conn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
+	n, err = s.conn.Write(p)
+	if err != nil {
+		s.metrics.RecordWriteError(s.network, s.raddr)
+	}
+	return
 }
 
 // Sync implements zapcore.WriteSyncer interface.
 func (s *ConnSyncer) Sync() error {
 	return nil
 }
+
+func isTooLongMessageError(err error) bool {
+	if opErr, ok := err.(*net.OpError); ok {
+		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
+			if errno, ok := sysErr.Err.(syscall.Errno); ok {
+				return errno.Error() == "message too long"
+			}
+		}
+	}
+	return false
+}
+
+type noopMetricsRecorder struct{}
+
+func (noopMetricsRecorder) RecordDialError(network, addr string)  {}
+func (noopMetricsRecorder) RecordWriteError(network, addr string) {}
