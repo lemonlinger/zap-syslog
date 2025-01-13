@@ -34,8 +34,8 @@ var (
 )
 
 type MetricsRecorder interface {
-	RecordDialError(network, addr string, err error)
-	RecordWriteError(network, addr string, err error)
+	RecordDialError(network, addr string)
+	RecordWriteError(network, addr string)
 }
 
 // ConnSyncer describes connection sink for syslog.
@@ -107,7 +107,7 @@ func (s *ConnSyncer) connect() error {
 	var c net.Conn
 	c, err := net.DialTimeout(s.network, s.raddr, s.dialTimeout)
 	if err != nil {
-		s.metrics.RecordDialError(s.network, s.raddr, err)
+		s.metrics.RecordDialError(s.network, s.raddr)
 		return err
 	}
 
@@ -122,7 +122,7 @@ func (s *ConnSyncer) Write(p []byte) (n int, err error) {
 		if n, err := s.conn.Write(p); err == nil {
 			return n, err
 		}
-		s.metrics.RecordWriteError(s.network, s.raddr, err)
+		s.metrics.RecordWriteError(s.network, s.raddr)
 		// No need to retry if it's a too long message error as the connection is still valid.
 		if isTooLongMessageError(err) {
 			return 0, err
@@ -135,7 +135,7 @@ func (s *ConnSyncer) Write(p []byte) (n int, err error) {
 	s.conn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
 	n, err = s.conn.Write(p)
 	if err != nil {
-		s.metrics.RecordWriteError(s.network, s.raddr, err)
+		s.metrics.RecordWriteError(s.network, s.raddr)
 	}
 	return
 }
@@ -158,5 +158,5 @@ func isTooLongMessageError(err error) bool {
 
 type noopMetricsRecorder struct{}
 
-func (noopMetricsRecorder) RecordDialError(network, addr string, err error)  {}
-func (noopMetricsRecorder) RecordWriteError(network, addr string, err error) {}
+func (noopMetricsRecorder) RecordDialError(network, addr string)  {}
+func (noopMetricsRecorder) RecordWriteError(network, addr string) {}
