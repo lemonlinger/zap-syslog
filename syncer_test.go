@@ -22,11 +22,13 @@ package zapsyslog
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -42,6 +44,8 @@ var (
 		`<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 `,
 	}
 	testMessage = testMessages[0]
+
+	longTestMessageFormat = `<34>1 2003-10-11T22:14:15.003Z mymachine.example.com su - ID47 - \xef\xbb\xbf'%s'`
 )
 
 func runPktSyslog(c net.PacketConn, done chan<- string) {
@@ -270,5 +274,28 @@ func TestSync(t *testing.T) {
 
 	if err := s.Sync(); err != nil {
 		t.Fatalf("Sync() should always returns nil")
+	}
+}
+
+func TestTooLongMessage(t *testing.T) {
+	addr, sock, srvWG := startServer("udp", "", make(chan string, 1))
+	defer srvWG.Wait()
+	defer sock.Close()
+	l, err := NewConnSyncer("udp", addr)
+	if err != nil {
+		t.Fatalf("NewConnSyncer() failed: %v", err)
+	}
+
+	for i := 8 * 1024; i <= 9*1024; i++ {
+		longMessage := fmt.Sprintf(longTestMessageFormat, strings.Repeat("x", i))
+		_, err = io.WriteString(l, longMessage)
+		if err != nil {
+			if isTooLongMessageError(err) {
+				t.Logf("WriteString() idx: %d, len: %d, returns error: %v", i, len(longMessage), err)
+			}
+			_, err = io.WriteString(l, testMessage)
+			t.Logf("write error: %v", err)
+			break
+		}
 	}
 }
